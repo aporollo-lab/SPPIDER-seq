@@ -1,7 +1,7 @@
 # SPPIDER-seq
 ## Sequence-based partner-aware prediction of PPI interaction sites
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aporollo-lab/SPPIDER-seq/blob/main/notebooks/SPPIDER-seq.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aporollo-lab/SPPIDER-seq/blob/main/notebooks/sppider_seq.ipynb)
 
 This project predicts protein-peptide interaction sites using pretrained models based on ESM-2 embeddings of the query protein and its interaction partner(s).
 
