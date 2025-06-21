@@ -1,0 +1,6 @@
+# Jupyter
+.ipynb_checkpoints/
+*.pyc
+__pycache__/
+.env
+.DS_Store
