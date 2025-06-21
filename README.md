@@ -13,7 +13,15 @@ This project predicts protein-peptide interaction sites using pretrained models 
 
 ## 🚀 Run the Model
 
-Click the Colab badge above to launch the notebook in your browser. It will automatically download the model from this repository.
+Click the Colab badge above to launch the notebook in your browser. The notebook will automatically download the pretrained models from this repository.
+
+Run each cell sequentially. When you reach the Input Form, you can either:
+
+    Provide your own protein of interest along with one or more potential interaction partners, or
+
+    Start with the example inputs available in the data/ folder.
+
+After specifying the sequences, click the <Run PPI predictions> button to initiate the interface prediction process.
 
 ## 📦 Requirements
 
