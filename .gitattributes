@@ -1,0 +1,15 @@
+# Normalize text files
+* text=auto
+
+# Keep notebooks consistent
+*.ipynb text eol=lf
+
+# Prevent diff noise for data files
+*.csv  -text
+*.tsv  -text
+
+# Optional: treat large binaries correctly
+*.h5   binary
+*.pt   binary
+*.pkl  binary
+

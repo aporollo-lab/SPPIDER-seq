@@ -1,6 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+
 # Jupyter
 .ipynb_checkpoints/
-*.pyc
-__pycache__/
-.env
+
+# OS noise
 .DS_Store
+Thumbs.db
+
+# Data (keep small, raw, or private out of Git)
+data/raw/
+*.tmp
+*.log
+
+# Models / outputs
+outputs/
+checkpoints/
