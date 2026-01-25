@@ -1,15 +1,39 @@
 # Normalize text files
-* text=auto
+* text=auto eol=lf
 
-# Keep notebooks consistent
-*.ipynb text eol=lf
-
+# Explicitly enforce LF for common text formats
 # Prevent diff noise for data files
-*.csv  -text
-*.tsv  -text
+*.txt     text eol=lf
+*.md      text eol=lf
+*.rst     text eol=lf
+*.yaml    text eol=lf
+*.yml     text eol=lf
+*.json    text eol=lf
+*.toml    text eol=lf
+*.ini     text eol=lf
+*.cfg     text eol=lf
+*.csv     text eol=lf
+*.tsv     text eol=lf
 
-# Optional: treat large binaries correctly
-*.h5   binary
-*.pt   binary
-*.pkl  binary
+# Python and notebooks
+*.py      text eol=lf
+*.ipynb   text eol=lf
+
+# Shell / scripts
+*.sh      text eol=lf
+*.bash    text eol=lf
+*.ps1     text eol=lf
+
+# Binary files (never normalize)
+*.pt      binary
+*.pkl     binary
+*.h5      binary
+*.bin     binary
+*.zip     binary
+*.tar     binary
+*.gz      binary
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.pdf     binary
 
