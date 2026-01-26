@@ -7,9 +7,10 @@ This project predicts protein-peptide interaction sites using pretrained models 
 
 ## 📂 Repository Structure
 
-- `notebooks/` – main analysis notebook and utility scripts
-- `models/` – pretrained models
-- `data/` – optional input/output examples
+- `notebooks/` – main workflow notebook and utility scripts
+- `models/` – pretrained partner-aware PPI site prediction models
+- `datasets/` – datasets used for training, validation, and benchmarking of the models.
+- `examples/` – optional input/output examples
 
 ## 🚀 Run the Model
 
@@ -18,7 +19,7 @@ Click the Colab badge above to launch the notebook in your browser. The notebook
 Run each cell sequentially. When you reach the **Input Form**, you can either:
 
 - Provide your own protein of interest along with one or more potential interaction partners, or  
-- Start with the example inputs available in the `data/` folder.
+- Start with the example inputs available in the `examples/` folder.
 
 After specifying the sequences, click the **Run PPI predictions** button to initiate the interface prediction process.
 
