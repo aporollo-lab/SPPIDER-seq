@@ -1,0 +1,7 @@
+numpy>=1.23
+matplotlib>=3.7
+torch>=2.1
+biopython>=1.80
+scipy>=1.10
+statsmodels>=0.14
+transformers>=4.40

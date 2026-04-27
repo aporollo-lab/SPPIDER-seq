@@ -1,0 +1,20 @@
+name: sppider-seq
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.12
+  - numpy
+  - matplotlib
+  - scipy
+  - pandas
+  - statsmodels
+  - biopython
+  - pytorch
+  - pip
+
+  - pip:
+      - transformers
+
