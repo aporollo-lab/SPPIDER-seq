@@ -5,7 +5,7 @@ DEFAULT_FASTA = """
 >Example1
 MTMTLHTKASGMALLHQIQGNELEPLNRPQLKIPLERPLGEVYLDSSKPAVYNYPEGAAY
 >Example2
-MVEIFDMLLATSSRFRMMNLQGEEFVCLKSIIL
+MEEPQSDPSVEPPLSQETFSDLWKLLPENNVLSPLPSQAMDDLMLSPDDIEQWFTEDPGPDEAPRMPEAAPPVAPAPAAPTPAAPAPAPSWPLSSSVPSQKTY
 """
 
 
@@ -43,7 +43,9 @@ def generate_alanine_scans(fasta_text, window_size, stride):
                 break
             actual_window = min(window_size, remaining)
             modified = sequence[:i] + "A" * actual_window + sequence[i + actual_window:]
-            result.append(f"{header}_AlaScan{i+1}\n{modified}")
+            start_pos = i + 1
+            end_pos = i + actual_window
+            result.append(f"{header}_AlaScan{start_pos}-{end_pos}\n{modified}")
             if actual_window < window_size:
                 break  # Stop after first trimming event
     return "\n".join(result)
@@ -69,14 +71,14 @@ def main():
     parser.add_argument(
         "--window-size",
         type=int,
-        default=10,
-        help="Alanine replacement window size. Default: 10",
+        default=30,
+        help="Alanine replacement window size. Default: 30",
     )
     parser.add_argument(
         "--stride",
         type=int,
-        default=3,
-        help="Sliding-window stride. Default: 3",
+        default=10,
+        help="Sliding-window stride. Default: 10",
     )
     args = parser.parse_args()
 
