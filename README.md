@@ -1,10 +1,18 @@
 # SPPIDER-seq
-## Sequence-based partner-aware prediction of PPI interaction sites
+
+## Sequence-based partner-aware prediction of protein–protein interaction sites
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aporollo-lab/SPPIDER-seq/blob/main/notebooks/sppider_seq.ipynb)
 
-This project predicts protein-peptide interaction sites using pretrained models based on ESM-2 embeddings of the query protein and its interaction partner(s).
+**SPPIDER-seq** is a deep learning framework for **partner-aware prediction of protein–protein interaction (PPI) sites directly from amino acid sequences**. Unlike conventional interface predictors that estimate a residue's general propensity to participate in protein interactions, SPPIDER-seq predicts **which residues are likely to bind a specific interaction partner**, enabling context-specific interface prediction without requiring experimental or predicted protein structures.
 
+The method combines **ESM-2 protein language model embeddings** with a **cross-attention neural network** that jointly models the query protein and its interaction partner. By explicitly learning partner-dependent sequence representations, SPPIDER-seq is particularly well suited for identifying interaction interfaces within **intrinsically disordered regions (IDRs)** and **short linear motifs (SLiMs)**, where partner context is often essential for determining binding specificity.
+
+<p align="center">
+  <img src="docs/figures/workflow.png" width="900">
+  <br>
+  <em>Overview of the SPPIDER-seq workflow.</em>
+</p>
 
 ## 📂 Repository Structure
 
@@ -101,9 +109,7 @@ conda activate sppider-seq
 
 ## 📣 Citation
 
-While the manuscript is under preparation, please cite the GitHub version if using this tool in your work:
+If you use **SPPIDER-seq** in your research, please cite:
 
-A. Porollo, O. Jadhav, A. Alvarez, J. Chen
-SPPIDER-seq: Sequence-based partner-aware predictor of protein-protein interaction sites.
-https://github.com/aporollo-lab/SPPIDER-seq/
+> Porollo A, Jadhav O, Alvarez A, Chen J. **SPPIDER-seq: sequence-based partner-aware predictor of protein-protein interaction sites.** *Bioinformatics*. 2026;42(7):btag388. https://doi.org/10.1093/bioinformatics/btag388
 
