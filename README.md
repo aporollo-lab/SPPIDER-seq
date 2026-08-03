@@ -14,13 +14,20 @@ The method combines **ESM-2 protein language model embeddings** with a **cross-a
   <em>Overview of the SPPIDER-seq workflow.</em>
 </p>
 
+
 ## 📂 Repository Structure
 
-- `notebooks/` – main workflow notebook and utility scripts
-- `cli/` – command-line interface versions of the main workflow scripts
-- `models/` – pretrained partner-aware PPI site prediction models
-- `datasets/` – datasets used for training, validation, and benchmarking of the models.
+- `notebooks/` – Google Colab notebooks providing the main SPPIDER-seq workflow and sequence analysis utilities
+- `cli/` – command-line interface and supporting scripts for local and batch execution
+- `docs/` – documentation assets and figures
 - `examples/` – optional input/output examples
+
+The current SPPIDER-seq resources are maintained on Hugging Face:
+
+- **Pretrained models:** https://huggingface.co/aporollo-lab/SPPIDER-seq
+- **Training and benchmark datasets:** https://huggingface.co/datasets/aporollo-lab/SPPIDER-seq-datasets
+
+The Google Colab notebook and the command-line version of SPPIDER-seq automatically download the current pretrained receptor-centric and peptide-centric models from Hugging Face. No manual model download or configuration is required for standard use. Custom model paths only need to be specified when using user-trained models or models retained from previous SPPIDER-seq releases.
 
 
 ## 🚀 Running SPPIDER-seq
