@@ -3,14 +3,14 @@ import os
 import random
 import re
 import time
-import urllib.request
 import zipfile
 from glob import glob
-from io import StringIO
+from io import BytesIO, StringIO
 from itertools import product
 
 try:
     import matplotlib.pyplot as plt
+    import requests
     import numpy as np
     import torch
     import torch.nn as nn
@@ -21,6 +21,7 @@ try:
     IMPORT_ERROR = None
 except ModuleNotFoundError as exc:
     plt = None
+    requests = None
     np = None
     torch = None
     nn = None
@@ -33,12 +34,22 @@ except ModuleNotFoundError as exc:
 
 
 ESM_MODEL_NAME = "facebook/esm2_t33_650M_UR50D"
-PEPTIDE_MODEL_URL = "https://raw.githubusercontent.com/aporollo-lab/SPPIDER-seq/main/models/crossattn_pep_run07_best.pt"
-RECEPTOR_MODEL_URL = "https://raw.githubusercontent.com/aporollo-lab/SPPIDER-seq/main/models/crossattn_rec_run27_best.pt"
-PEPTIDE_MODEL_PATH = "models/peptide_model.pt"
-RECEPTOR_MODEL_PATH = "models/receptor_model.pt"
-PEPTIDE_MODEL_FALLBACK = "models/crossattn_pep_run07_best.pt"
-RECEPTOR_MODEL_FALLBACK = "models/crossattn_rec_run27_best.pt"
+
+HF_MODEL_REPO = "aporollo-lab/SPPIDER-seq"
+HF_MODEL_REVISION = "main"
+PEPTIDE_MODEL_URL = (
+    f"https://huggingface.co/{HF_MODEL_REPO}/resolve/{HF_MODEL_REVISION}/"
+    "models/sppider_seq_peptide.pt"
+)
+RECEPTOR_MODEL_URL = (
+    f"https://huggingface.co/{HF_MODEL_REPO}/resolve/{HF_MODEL_REVISION}/"
+    "models/sppider_seq_receptor.pt"
+)
+
+# Optional local custom checkpoints. When left as None, the public Hugging Face
+# production models are retrieved into memory and are not saved as local files.
+PEPTIDE_MODEL_PATH = None
+RECEPTOR_MODEL_PATH = None
 
 NUM_HEADS = 16
 MAX_TOKENS = 1024
@@ -282,62 +293,121 @@ def merge_chunk_logits_to_full(pooled_per_q, q_starts, full_len, device_arg=None
     return out
 
 
-def _safe_torch_load(path, map_location=None):
+def _rewind_model_source(source):
+    """Rewind an in-memory checkpoint before each torch.load attempt."""
+    if hasattr(source, "seek"):
+        source.seek(0)
+
+
+def _safe_torch_load(source, map_location=None):
     """
-    Torch 2.6+ defaults to weights_only=True, which can break older checkpoints.
-    This helper first tries the default behavior, and if that fails, retries with
-    weights_only=False (trusted file).
+    Load a checkpoint from either an in-memory buffer or a local file path.
+
+    Torch 2.6+ defaults to weights_only=True, which can break some older
+    checkpoints. If needed, retry with weights_only=False for these trusted
+    SPPIDER-seq model files.
     """
+    _rewind_model_source(source)
     try:
-        return torch.load(path, map_location=map_location)
+        return torch.load(source, map_location=map_location)
     except TypeError:
         raise
     except Exception:
-        return torch.load(path, map_location=map_location, weights_only=False)
+        _rewind_model_source(source)
+        return torch.load(
+            source,
+            map_location=map_location,
+            weights_only=False,
+        )
 
 
-def _find_existing_model_path(primary, fallback=None):
+def _download_model_to_memory(url, label):
+    """Retrieve a public checkpoint into a BytesIO buffer without saving it."""
+    print(f"Retrieving {label} model from Hugging Face...")
+    try:
+        response = requests.get(url, timeout=300)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(
+            f"Failed to retrieve the {label} model from {url}: {exc}"
+        ) from exc
+
+    buffer = BytesIO(response.content)
+    buffer.seek(0)
+    return buffer
+
+
+def _get_model_source(local_path, url, label):
     """
-    Helper: return the first existing path among [primary, fallback].
-    Raises FileNotFoundError with a clear message if nothing is found.
+    Return a local custom checkpoint when supplied; otherwise retrieve the
+    public production checkpoint from Hugging Face into memory.
     """
-    candidates = [primary]
-    if fallback and fallback not in candidates:
-        candidates.append(fallback)
-    for path in candidates:
-        if path and os.path.exists(path):
-            return path
-    raise FileNotFoundError(
-        f"Some of the expected model files were not found: {candidates}. "
-        "Use --download-models or provide --peptide-model-path/--receptor-model-path."
-    )
+    if local_path:
+        if not os.path.isfile(local_path):
+            raise FileNotFoundError(
+                f"The specified {label} model file does not exist: {local_path}"
+            )
+        return local_path
+
+    return _download_model_to_memory(url, label)
+
+
+def _describe_model_source(source, url):
+    if hasattr(source, "read") and hasattr(source, "seek"):
+        return url
+    return str(source)
 
 
 def load_ppi_models():
     """
-    Load peptide- and receptor-centric models using the configured model paths.
+    Load peptide- and receptor-centric models.
+
+    By default, both public production checkpoints are retrieved from Hugging
+    Face into memory. --peptide-model-path and --receptor-model-path may be
+    used independently to substitute local compatible checkpoints.
     """
     global peptide_site_model, receptor_site_model
 
-    pep_path = _find_existing_model_path(PEPTIDE_MODEL_PATH, PEPTIDE_MODEL_FALLBACK)
-    rec_path = _find_existing_model_path(RECEPTOR_MODEL_PATH, RECEPTOR_MODEL_FALLBACK)
+    pep_source = None
+    rec_source = None
 
     if peptide_site_model is None:
-        print(f"Loading peptide-centric model from {pep_path}")
-        m = ChunkwiseInteractionModel(embed_dim=EMBED_DIM, num_heads=NUM_HEADS).to(device)
-        state = _safe_torch_load(pep_path, map_location=device)
-        m.load_state_dict(state, strict=True)
-        m.eval()
-        peptide_site_model = m
+        pep_source = _get_model_source(
+            PEPTIDE_MODEL_PATH,
+            PEPTIDE_MODEL_URL,
+            "peptide-centric",
+        )
+        print(
+            "Loading peptide-centric model from "
+            f"{_describe_model_source(pep_source, PEPTIDE_MODEL_URL)}"
+        )
+        model = ChunkwiseInteractionModel(
+            embed_dim=EMBED_DIM,
+            num_heads=NUM_HEADS,
+        ).to(device)
+        state = _safe_torch_load(pep_source, map_location=device)
+        model.load_state_dict(state, strict=True)
+        model.eval()
+        peptide_site_model = model
 
     if receptor_site_model is None:
-        print(f"Loading receptor-centric model from {rec_path}")
-        m = ChunkwiseInteractionModel(embed_dim=EMBED_DIM, num_heads=NUM_HEADS).to(device)
-        state = _safe_torch_load(rec_path, map_location=device)
-        m.load_state_dict(state, strict=True)
-        m.eval()
-        receptor_site_model = m
-
+        rec_source = _get_model_source(
+            RECEPTOR_MODEL_PATH,
+            RECEPTOR_MODEL_URL,
+            "receptor-centric",
+        )
+        print(
+            "Loading receptor-centric model from "
+            f"{_describe_model_source(rec_source, RECEPTOR_MODEL_URL)}"
+        )
+        model = ChunkwiseInteractionModel(
+            embed_dim=EMBED_DIM,
+            num_heads=NUM_HEADS,
+        ).to(device)
+        state = _safe_torch_load(rec_source, map_location=device)
+        model.load_state_dict(state, strict=True)
+        model.eval()
+        receptor_site_model = model
 
 def predict_query_given_context(query_seq, context_seq, model, cache_query=True, cache_context=True):
     """
@@ -631,14 +701,37 @@ def collect_sites(input_dir, cutoff=0.5, fdr_limit="None"):
     return output_lines
 
 
-def maybe_download_models():
-    os.makedirs("models", exist_ok=True)
-    if not os.path.exists(PEPTIDE_MODEL_PATH):
-        print(f"Downloading peptide-centric model to {PEPTIDE_MODEL_PATH}")
-        urllib.request.urlretrieve(PEPTIDE_MODEL_URL, PEPTIDE_MODEL_PATH)
-    if not os.path.exists(RECEPTOR_MODEL_PATH):
-        print(f"Downloading receptor-centric model to {RECEPTOR_MODEL_PATH}")
-        urllib.request.urlretrieve(RECEPTOR_MODEL_URL, RECEPTOR_MODEL_PATH)
+def resolve_huggingface_cache_dir(explicit_cache_dir=None):
+    """
+    Return the effective Hugging Face cache directory used for model downloads.
+
+    Priority:
+      1. --esm-cache-dir
+      2. HF_HUB_CACHE
+      3. TRANSFORMERS_CACHE
+      4. HF_HOME/hub
+      5. XDG_CACHE_HOME/huggingface/hub
+      6. ~/.cache/huggingface/hub
+    """
+    if explicit_cache_dir:
+        return os.path.abspath(os.path.expanduser(explicit_cache_dir))
+    if os.environ.get("HF_HUB_CACHE"):
+        return os.path.abspath(os.path.expanduser(os.environ["HF_HUB_CACHE"]))
+    if os.environ.get("TRANSFORMERS_CACHE"):
+        return os.path.abspath(os.path.expanduser(os.environ["TRANSFORMERS_CACHE"]))
+    if os.environ.get("HF_HOME"):
+        return os.path.abspath(
+            os.path.join(os.path.expanduser(os.environ["HF_HOME"]), "hub")
+        )
+    if os.environ.get("XDG_CACHE_HOME"):
+        return os.path.abspath(
+            os.path.join(
+                os.path.expanduser(os.environ["XDG_CACHE_HOME"]),
+                "huggingface",
+                "hub",
+            )
+        )
+    return os.path.abspath(os.path.expanduser("~/.cache/huggingface/hub"))
 
 
 def setup_runtime(args):
@@ -670,12 +763,24 @@ def setup_runtime(args):
         device = torch.device(args.device)
     print("Using device:", device, "\n")
 
-    if args.download_models:
-        maybe_download_models()
+    esm_cache_dir = resolve_huggingface_cache_dir(args.esm_cache_dir)
+    os.makedirs(esm_cache_dir, exist_ok=True)
 
     print(f"Loading ESM-2 checkpoint: {ESM_MODEL_NAME}...")
-    tokenizer = EsmTokenizer.from_pretrained(ESM_MODEL_NAME)
-    esm_model = EsmModel.from_pretrained(ESM_MODEL_NAME).to(device)
+    print(f"Using Hugging Face cache directory: {esm_cache_dir}")
+    print(
+        "The first run may download several gigabytes. "
+        "Subsequent runs reuse the cached files."
+    )
+
+    tokenizer = EsmTokenizer.from_pretrained(
+        ESM_MODEL_NAME,
+        cache_dir=esm_cache_dir,
+    )
+    esm_model = EsmModel.from_pretrained(
+        ESM_MODEL_NAME,
+        cache_dir=esm_cache_dir,
+    ).to(device)
 
     for param in esm_model.parameters():
         param.requires_grad = False
@@ -691,7 +796,17 @@ def setup_runtime(args):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Run SPPIDER-seq partner-aware PPI site predictions from FASTA files."
+        description="Run SPPIDER-seq partner-aware PPI site predictions from FASTA files.",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=(
+            "ESM cache examples:\n"
+            "  Linux/macOS default: ~/.cache/huggingface/hub\n"
+            "  Windows default:     C:\\Users\\<username>\\.cache\\huggingface\\hub\n"
+            "  Custom HPC location: --esm-cache-dir /path/to/hf_cache\n"
+            "\n"
+            "Monitor an ESM-2 download on Linux:\n"
+            "  watch -n 2 'du -sh <cache>/models--facebook--esm2_t33_650M_UR50D'\n"
+        ),
     )
     parser.add_argument("--query", required=True, help="FASTA file containing query sequence(s).")
     parser.add_argument("--partners", required=True, help="FASTA file containing partner sequence(s).")
@@ -708,12 +823,51 @@ def build_parser():
         help="FDR cutoff for site summary. Default: None",
     )
 
-    parser.add_argument("--esm-model-name", default=ESM_MODEL_NAME, help=f"ESM model name. Default: {ESM_MODEL_NAME}")
-    parser.add_argument("--peptide-model-path", default=PEPTIDE_MODEL_PATH, help=f"Peptide model path. Default: {PEPTIDE_MODEL_PATH}")
-    parser.add_argument("--receptor-model-path", default=RECEPTOR_MODEL_PATH, help=f"Receptor model path. Default: {RECEPTOR_MODEL_PATH}")
-    parser.add_argument("--peptide-model-url", default=PEPTIDE_MODEL_URL, help="Peptide model download URL.")
-    parser.add_argument("--receptor-model-url", default=RECEPTOR_MODEL_URL, help="Receptor model download URL.")
-    parser.add_argument("--download-models", action="store_true", help="Download missing notebook-style model files before prediction.")
+    parser.add_argument(
+        "--esm-model-name",
+        default=ESM_MODEL_NAME,
+        help=f"ESM model name. Default: {ESM_MODEL_NAME}",
+    )
+    parser.add_argument(
+        "--esm-cache-dir",
+        default=None,
+        help=(
+            "Directory for caching the ESM-2 tokenizer and model files. "
+            "If omitted, Hugging Face chooses the cache using, in order, "
+            "HF_HUB_CACHE, TRANSFORMERS_CACHE, HF_HOME, XDG_CACHE_HOME, "
+            "or the default ~/.cache/huggingface/hub. "
+            "Linux/macOS: inspect with 'echo $HF_HUB_CACHE; "
+            "echo $TRANSFORMERS_CACHE; echo $HF_HOME; echo $XDG_CACHE_HOME'. "
+            "Windows PowerShell: inspect with '$env:HF_HUB_CACHE; "
+            "$env:TRANSFORMERS_CACHE; $env:HF_HOME; $env:XDG_CACHE_HOME'."
+        ),
+    )
+    parser.add_argument(
+        "--peptide-model-path",
+        default=None,
+        help=(
+            "Optional local peptide-centric .pt checkpoint. "
+            "By default, the public Hugging Face production model is used."
+        ),
+    )
+    parser.add_argument(
+        "--receptor-model-path",
+        default=None,
+        help=(
+            "Optional local receptor-centric .pt checkpoint. "
+            "By default, the public Hugging Face production model is used."
+        ),
+    )
+    parser.add_argument(
+        "--peptide-model-url",
+        default=PEPTIDE_MODEL_URL,
+        help=f"Peptide model URL. Default: {PEPTIDE_MODEL_URL}",
+    )
+    parser.add_argument(
+        "--receptor-model-url",
+        default=RECEPTOR_MODEL_URL,
+        help=f"Receptor model URL. Default: {RECEPTOR_MODEL_URL}",
+    )
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto", help="Inference device. Default: auto")
     parser.add_argument("--num-heads", type=int, default=16, help="Cross-attention heads. Default: 16")
     parser.add_argument("--max-tokens", type=int, default=1024, help="ESM token chunk size including BOS/EOS. Default: 1024")
